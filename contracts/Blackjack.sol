@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import {Dealer} from "./Dealer.sol";
 
-contract Blackjack is ERC721, Ownable {
+contract Blackjack is Ownable {
     struct GameData {
         uint256 betAmount;
         uint256 lastRequestId;
@@ -20,10 +19,7 @@ contract Blackjack is ERC721, Ownable {
     address immutable vault;
     uint256 public totalSupply;
 
-    constructor(
-        address _vault,
-        address _dealer
-    ) payable ERC721("blackjack", "BJK") {
+    constructor(address _vault, address _dealer) payable {
         require(msg.value >= 0, "Need to place an initial bet!");
         /*
            Set up the vault, generate random numbers for the hands and
