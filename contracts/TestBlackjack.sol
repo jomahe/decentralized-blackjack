@@ -13,12 +13,14 @@ import {Dealer} from "./TestDealer.sol";
 contract Blackjack is Ownable {
     event Hit();
     event Win();
+    event Paid();
     event Bust();
 
     struct Hand {
         uint8[] cards;
         bool soft;
         bool firstTurn;
+        bool finished;
     }
     struct GameData {
         Hand[4] hands;
@@ -82,7 +84,7 @@ contract Blackjack is Ownable {
         uint8 currSum = gameData.dealerHand.cards[0];
 
         while (currSum <= min(21, playerHand)) {
-            // Dealer must stop at hard 17 or above
+            // Dealer os forced to stop hitting at hard 17 or above
             if (currSum >= 18 || (currSum == 17 && !gameData.dealerHand.soft)) {
                 break;
             }
@@ -93,8 +95,11 @@ contract Blackjack is Ownable {
             currSum = getHandSum(0, true);
         }
 
-        // Dealer busts
-        if (currSum > 21) emit Win();
+        // Player wins if their hand value is greater than the dealer's
+        if (currSum > 21 || playerHand > currSum) {
+            payout(msg.sender, handNum, playerHand);
+            emit Win();
+        } else if (playerHand == currSum) {}
     }
 
     // TODO: Implement the split function
@@ -110,29 +115,42 @@ contract Blackjack is Ownable {
             ? gameData.dealerHand.cards
             : gameData.hands[handNum].cards;
         uint8 numCards = uint8(hand.length);
-
+        uint8 aces;
         for (uint i; i < numCards; ++i) {
             // Add aces at the end due to dynamic valuation
             uint8 card = hand[i];
-            if (card != 1) handSum = card >= 10 ? handSum + 10 : handSum + card;
+            if (card != 1) {
+                handSum = card >= 10 ? handSum + 10 : handSum + card;
+            } else {
+                ++aces;
+            }
         }
 
-        uint8 aces = numAces(handNum, numCards, _dealer);
-
-        /**
-         * TODO: Need to update the logic on soft hands
-         */
-
-        gameData.hands[handNum].soft = false;
         for (uint j; j < aces; ++j) {
-            if (handSum + 11 + (aces - j) >= 21) {
+            if (handSum + 11 + (aces - j - 1) > 21) {
                 ++handSum;
-                gameData.hands[handNum].soft = true;
             } else {
                 handSum += 11;
             }
         }
+        gameData.hands[handNum].soft = (handSum > 11 && aces > 0);
         return handSum;
+    }
+
+    function payout(address winner, uint8 handNum, uint8 playerHand) internal {
+        require(!gameData.hands[handNum].finished);
+        /**
+         * If the player wins, we send them back their original bet along with
+         * their winnings. If the player wins on a blackjack, their payout is
+         * 1.5x their original bet.
+         */
+        unchecked {
+            uint256 amountToPay = (playerHand == 21)
+                ? (gameData.betAmount >> 2) * 5
+                : (gameData.betAmount << 2);
+            payable(winner).transfer(amountToPay);
+            emit Paid();
+        }
     }
 
     function numAces(
