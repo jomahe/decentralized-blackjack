@@ -1,0 +1,21 @@
+{
+  "abi": [],
+  "bytecode": {
+    "object": "0x",
+    "linkReferences": {}
+  },
+  "deployedBytecode": {
+    "object": "0x",
+    "linkReferences": {}
+  },
+  "ast": {
+    "absolutePath": "src/Dealer.sol",
+    "id": 43538,
+    "exportedSymbols": {},
+    "nodeType": "SourceUnit",
+    "src": "3159:0:23",
+    "nodes": [],
+    "license": "MIT"
+  },
+  "id": 23
+}
