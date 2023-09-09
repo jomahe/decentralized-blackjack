@@ -12,6 +12,7 @@ import {Dealer} from "./TestDealer.sol";
  */
 contract Blackjack is Ownable {
     event Hit();
+    event Split();
     event Win();
     event Paid();
     event Bust();
@@ -26,12 +27,13 @@ contract Blackjack is Ownable {
         Hand[4] hands;
         uint256 betAmount;
         Hand dealerHand;
+        uint8 nextOpenHandSlot;
         bool insurance;
     }
     GameData gameData;
     Dealer dealer;
-    address immutable vault;
-    uint256 public totalSupply;
+    address private immutable vault;
+    address private immutable player;
 
     constructor(address _vault, address _dealer) payable {
         require(msg.value >= 0, "Need to place an initial bet!");
@@ -41,6 +43,7 @@ contract Blackjack is Ownable {
         */
         vault = _vault;
         dealer = Dealer(_dealer);
+        player = msg.sender;
 
         uint cardDraw = dealer.random();
 
@@ -55,9 +58,23 @@ contract Blackjack is Ownable {
         gameData.betAmount = msg.value;
         gameData.insurance = false;
         gameData.hands[0].firstTurn = true;
+        gameData.nextOpenHandSlot = 1;
     }
 
-    function hit(bool _insurance, uint8 handNum) external payable {
+    modifier handValid(uint8 handNum) {
+        require(gameData.hands[handNum].cards.length != 0);
+        _;
+    }
+
+    modifier onlyPlayer() {
+        require(msg.sender == player);
+        _;
+    }
+
+    function hit(
+        bool _insurance,
+        uint8 handNum
+    ) external payable onlyPlayer handValid(handNum) {
         // Function logic
         if (_insurance) {
             require(
@@ -77,7 +94,7 @@ contract Blackjack is Ownable {
         }
     }
 
-    function stand(uint8 handNum) external {
+    function stand(uint8 handNum) external onlyPlayer handValid(handNum) {
         // Dealer draws second card, keeps drawing until bust or sum greater than player's
         uint256 draws = dealer.random();
         uint8 playerHand = getHandSum(handNum, false);
@@ -102,8 +119,38 @@ contract Blackjack is Ownable {
         } else if (playerHand == currSum) {}
     }
 
-    // TODO: Implement the split function
-    function split(uint handNum) external payable {}
+    /**
+     * Player allowed to split their hand only if they were dealt a pair.
+     * They must place the same bet for the second hand and each of the two
+     * starts with one of the pair cards. They draw a second card for each hand.
+     */
+    function split(
+        uint8 handNum
+    ) external payable onlyPlayer handValid(handNum) {
+        uint8[] memory cards = gameData.hands[handNum].cards;
+        require(cards[0] == cards[1]);
+        require(msg.value == gameData.betAmount);
+        require(gameData.nextOpenHandSlot < 4); // Can only split to four hands
+
+        // Draw new cards for both hands
+        uint newCards = dealer.random();
+        uint8 firstCard = uint8((newCards % 13) + 1);
+        gameData.hands[handNum].cards[1] = firstCard;
+
+        uint8[] memory newHand = new uint8[](2);
+        uint8 secondCard = uint8(((newCards / 100) % 13) + 1);
+        newHand[0] = cards[1];
+        newHand[1] = secondCard;
+
+        gameData.hands[gameData.nextOpenHandSlot++] = Hand({
+            cards: newHand,
+            soft: false,
+            firstTurn: true,
+            finished: false
+        });
+
+        emit Split();
+    }
 
     function isBusted(uint8 handNum, bool _dealer) internal returns (bool) {
         return (getHandSum(handNum, _dealer) > 21);
@@ -153,24 +200,7 @@ contract Blackjack is Ownable {
         }
     }
 
-    function numAces(
-        uint8 handNum,
-        uint8 cards,
-        bool _dealer
-    ) internal view returns (uint8) {
-        uint8[] memory hand = _dealer
-            ? gameData.dealerHand.cards
-            : gameData.hands[handNum].cards;
-        uint8 aces;
-        unchecked {
-            for (uint i; i < cards; ++i) {
-                if (hand[i] == 1) ++aces;
-            }
-        }
-        return aces;
-    }
-
-    function min(uint8 a, uint8 b) public pure returns (uint8) {
+    function min(uint8 a, uint8 b) internal pure returns (uint8) {
         return (a < b) ? a : b;
     }
 }
