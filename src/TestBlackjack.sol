@@ -13,9 +13,12 @@ import {Dealer} from "./TestDealer.sol";
 contract Blackjack is Ownable {
     event Hit(uint8);
     event Split();
-    event Win();
+    event Win(uint8);
     event Paid();
+    event Push(uint8);
     event Bust(uint8);
+    event Loss(uint8);
+    event PlayerBlackjack();
 
     struct Hand {
         uint8[] cards;
@@ -113,7 +116,9 @@ contract Blackjack is Ownable {
         // Dealer draws second card, keeps drawing until bust or sum greater than player's
         uint256 draws = dealer.random();
         uint8 playerHand = getHandSum(handNum, false);
-        uint8 currSum = gameData.dealerHand.cards[0];
+        // uint8 currSum = gameData.dealerHand.cards[0];
+        // TODO: uncomment the above line after testing:
+        uint8 currSum = getHandSum(0, true);
 
         while (currSum <= min(21, playerHand)) {
             // Dealer os forced to stop hitting at hard 17 or above
@@ -127,11 +132,20 @@ contract Blackjack is Ownable {
             currSum = getHandSum(0, true);
         }
 
-        // Player wins if their hand value is greater than the dealer's
         if (currSum > 21 || playerHand > currSum) {
-            payout(msg.sender, handNum, playerHand);
-            emit Win();
-        } else if (playerHand == currSum) {}
+            emit Win(playerHand);
+        } else if (currSum == playerHand) {
+            emit Push(playerHand);
+        } else {
+            emit Loss(playerHand);
+        }
+        if (playerHand == 21) emit PlayerBlackjack();
+
+        // Player wins if their hand value is greater than the dealer's
+        // if (currSum > 21 || playerHand > currSum) {
+        //     payout(msg.sender, handNum, playerHand);
+        //     emit Win();
+        // } else if (playerHand == currSum) {}
     }
 
     /**
@@ -257,7 +271,8 @@ contract Blackjack is Ownable {
         gameData.hands[handNum].cards[1] = _card2;
     }
 
-    function setDealerCard(uint8 _card) external {
-        gameData.dealerHand.cards[0] = _card;
+    function setDealerCards(uint8 _card1, uint8 _card2) external {
+        gameData.dealerHand.cards[0] = _card1;
+        gameData.dealerHand.cards.push(_card2);
     }
 }

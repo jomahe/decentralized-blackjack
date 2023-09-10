@@ -111,18 +111,18 @@ contract HitTest is Test {
     }
 
     function testInsuranceTrue() public {
-        blackjack.setDealerCard(1);
+        blackjack.setDealerCards(1, 1);
         blackjack.hit{value: 1 ether}(true, 0);
     }
 
     function testInsuranceTrueNoValue() public {
-        blackjack.setDealerCard(1);
+        blackjack.setDealerCards(1, 1);
         vm.expectRevert(bytes(""));
         blackjack.hit{value: 0}(true, 0);
     }
 
     function testInsuranceNoAce() public {
-        blackjack.setDealerCard(2);
+        blackjack.setDealerCards(2, 2);
         vm.expectRevert(bytes(""));
         blackjack.hit{value: 1}(true, 0);
     }
@@ -153,7 +153,7 @@ contract HitTest is Test {
 
     function testInvalidTurn() public {
         blackjack.hit(false, 0);
-        blackjack.setDealerCard(1);
+        blackjack.setDealerCards(1, 1);
         emit log_string("Successfully hit");
 
         vm.expectRevert(bytes(""));
@@ -161,10 +161,63 @@ contract HitTest is Test {
     }
 
     function testHitSuccessInsuranceTrue() public {
-        blackjack.setDealerCard(1);
+        blackjack.setDealerCards(1, 1);
         blackjack.setPlayerCards(1, 1, 0);
         vm.expectEmit(false, false, false, false);
         emit Hit(1);
         blackjack.hit{value: 1 ether}(true, 0);
+    }
+}
+
+contract StandTest is Test {
+    Blackjack public blackjack;
+    Dealer public _dealer;
+
+    uint8[2] playerCards;
+    uint8[2] dealerCards;
+    Blackjack.Hand playerHand;
+    Blackjack.Hand dealerHand;
+
+    event Hit(uint8);
+    event Bust(uint8);
+    event Win(uint8);
+    event Push(uint8);
+    event Loss(uint8);
+    event PlayerBlackjack();
+
+    function setUp() public {
+        _dealer = new Dealer();
+        vm.deal(address(this), 10 ether);
+        blackjack = new Blackjack{value: 1 ether}(
+            address(0x0),
+            address(_dealer)
+        );
+        _dealer.transferOwner(address(blackjack));
+    }
+
+    function testPlayerBlackJack() public {
+        blackjack.setPlayerCards(1, 10, 0);
+        blackjack.setDealerCards(10, 7);
+        vm.expectEmit(false, false, false, false);
+        emit Win(21);
+        vm.expectEmit(false, false, false, false);
+        emit PlayerBlackjack();
+        blackjack.stand(0);
+    }
+
+    function testPush() public {
+        blackjack.setPlayerCards(10, 7, 0);
+        blackjack.setDealerCards(10, 7);
+        vm.expectEmit(false, false, false, false);
+        emit Push(17);
+        blackjack.stand(0);
+    }
+
+    function testLoss() public {
+        blackjack.setPlayerCards(10, 7, 0);
+        blackjack.setDealerCards(10, 1);
+        vm.expectEmit(false, false, false, false);
+        emit Loss(17);
+        blackjack.stand(0);
     }
 }
