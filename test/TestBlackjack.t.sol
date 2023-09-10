@@ -87,3 +87,84 @@ contract ConstructorTest is Test {
         assertEq(blackjack.getHands()[0].firstTurn, true);
     }
 }
+
+contract HitTest is Test {
+    Blackjack public blackjack;
+    Dealer public _dealer;
+
+    uint8[2] playerCards;
+    uint8[2] dealerCards;
+    Blackjack.Hand playerHand;
+    Blackjack.Hand dealerHand;
+
+    event Hit(uint8);
+    event Bust(uint8);
+
+    function setUp() public {
+        _dealer = new Dealer();
+        vm.deal(address(this), 10 ether);
+        blackjack = new Blackjack{value: 1 ether}(
+            address(0x0),
+            address(_dealer)
+        );
+        _dealer.transferOwner(address(blackjack));
+    }
+
+    function testInsuranceTrue() public {
+        blackjack.setDealerCard(1);
+        blackjack.hit{value: 1 ether}(true, 0);
+    }
+
+    function testInsuranceTrueNoValue() public {
+        blackjack.setDealerCard(1);
+        vm.expectRevert(bytes(""));
+        blackjack.hit{value: 0}(true, 0);
+    }
+
+    function testInsuranceNoAce() public {
+        blackjack.setDealerCard(2);
+        vm.expectRevert(bytes(""));
+        blackjack.hit{value: 1}(true, 0);
+    }
+
+    function testInvalidHandNum() public {
+        vm.expectRevert(bytes("Hand invalid"));
+        blackjack.hit(false, 1);
+    }
+
+    function testHitSuccessful() public {
+        blackjack.setPlayerCards(1, 1, 0);
+        vm.expectEmit(false, false, false, false);
+        emit Hit(1);
+        uint8 newCard = blackjack.hit(false, 0);
+
+        emit log_uint(newCard);
+    }
+
+    function testHitBust() public {
+        // Expect this test to fail 1/13 times because the player will draw an Ace
+        blackjack.setPlayerCards(10, 10, 0);
+        vm.expectEmit(false, false, false, false);
+        emit Bust(1);
+        vm.expectEmit(false, false, false, false);
+        emit Hit(1);
+        blackjack.hit(false, 0);
+    }
+
+    function testInvalidTurn() public {
+        blackjack.hit(false, 0);
+        blackjack.setDealerCard(1);
+        emit log_string("Successfully hit");
+
+        vm.expectRevert(bytes(""));
+        blackjack.hit(true, 0);
+    }
+
+    function testHitSuccessInsuranceTrue() public {
+        blackjack.setDealerCard(1);
+        blackjack.setPlayerCards(1, 1, 0);
+        vm.expectEmit(false, false, false, false);
+        emit Hit(1);
+        blackjack.hit{value: 1 ether}(true, 0);
+    }
+}

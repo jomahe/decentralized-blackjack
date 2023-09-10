@@ -11,11 +11,11 @@ import {Dealer} from "./TestDealer.sol";
  * Blackjack.
  */
 contract Blackjack is Ownable {
-    event Hit();
+    event Hit(uint8);
     event Split();
     event Win();
     event Paid();
-    event Bust();
+    event Bust(uint8);
 
     struct Hand {
         uint8[] cards;
@@ -62,24 +62,26 @@ contract Blackjack is Ownable {
     }
 
     modifier handValid(uint8 handNum) {
-        require(gameData.hands[handNum].cards.length != 0);
+        require(gameData.hands[handNum].cards.length != 0, "Hand invalid");
         _;
     }
 
     modifier onlyPlayer() {
-        require(msg.sender == player);
+        require(msg.sender == player, "Must be player to call function");
         _;
     }
 
     function hit(
         bool _insurance,
         uint8 handNum
-    ) external payable onlyPlayer handValid(handNum) {
+    ) external payable onlyPlayer handValid(handNum) returns (uint8) {
         // Function logic
         if (_insurance) {
             require(
                 gameData.hands[handNum].firstTurn &&
-                    msg.value == gameData.betAmount
+                    msg.value == gameData.betAmount &&
+                    gameData.dealerHand.cards[0] == 1 &&
+                    !gameData.hands[handNum].finished
             );
             gameData.insurance = true;
             gameData.betAmount <<= 1;
@@ -90,8 +92,21 @@ contract Blackjack is Ownable {
 
         // Player busts
         if (isBusted(handNum, false)) {
-            emit Bust();
+            emit Bust(
+                newCard +
+                    gameData.hands[handNum].cards[0] +
+                    gameData.hands[handNum].cards[1]
+            );
+            gameData.hands[handNum].finished = true;
+            // payout(msg.sender, handNum, getHandSum(handNum, false));
         }
+
+        emit Hit(
+            newCard +
+                gameData.hands[handNum].cards[0] +
+                gameData.hands[handNum].cards[1]
+        );
+        return newCard;
     }
 
     function stand(uint8 handNum) external onlyPlayer handValid(handNum) {
@@ -191,12 +206,16 @@ contract Blackjack is Ownable {
          * their winnings. If the player wins on a blackjack, their payout is
          * 1.5x their original bet.
          */
-        unchecked {
-            uint256 amountToPay = (playerHand == 21)
-                ? (gameData.betAmount >> 2) * 5
-                : (gameData.betAmount << 2);
-            payable(winner).transfer(amountToPay);
-            emit Paid();
+        if (playerHand <= 21) {
+            unchecked {
+                uint256 amountToPay = (playerHand == 21)
+                    ? (gameData.betAmount >> 2) * 5
+                    : (gameData.betAmount << 2);
+                payable(winner).transfer(amountToPay);
+                emit Paid();
+            }
+        } else {
+            payable(vault).transfer(gameData.betAmount);
         }
     }
 
@@ -204,13 +223,9 @@ contract Blackjack is Ownable {
         return (a < b) ? a : b;
     }
 
-    //     struct GameData {
-    //     Hand[4] hands;
-    //     uint256 betAmount;
-    //     Hand dealerHand;
-    //     uint8 nextOpenHandSlot;
-    //     bool insurance;
-    // }
+    /** /////////////////////////////////////////
+     *  FUNCTIONS FOR TESTING
+     */ /////////////////////////////////////////
     function getBetAmount() external view returns (uint256) {
         return gameData.betAmount;
     }
@@ -235,5 +250,14 @@ contract Blackjack is Ownable {
 
     function getDealerCards() external view returns (uint8[] memory) {
         return gameData.dealerHand.cards;
+    }
+
+    function setPlayerCards(uint8 _card1, uint8 _card2, uint8 handNum) public {
+        gameData.hands[handNum].cards[0] = _card1;
+        gameData.hands[handNum].cards[1] = _card2;
+    }
+
+    function setDealerCard(uint8 _card) external {
+        gameData.dealerHand.cards[0] = _card;
     }
 }
