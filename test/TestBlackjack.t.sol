@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.21;
 
-import "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {Blackjack} from "../src/TestBlackjack.sol";
 import {Dealer} from "../src/TestDealer.sol";
 
@@ -34,16 +34,18 @@ contract ConstructorTest is Test {
             )
         );
 
+        emit log_uint(draws);
+
         playerCards[1] = uint8((draws % 13) + 1);
         playerCards[0] = uint8((draws / 10000) % 13) + 1;
-        // playerHand = Blackjack.Hand({
-        //     cards: playerCards,
-        //     soft: false,
-        //     firstTurn: true,
-        //     finished: false
-        // });
+
+        emit log_string("Experimental player cards: ");
+        emit log_uint(playerCards[1]);
+        emit log_uint(playerCards[0]);
 
         dealerCards[0] = uint8(((draws / 100) % 13) + 1);
+        emit log_string("Experimental dealer cards: ");
+        emit log_uint(dealerCards[0]);
     }
 
     function testFailNoValue() public {
@@ -54,50 +56,34 @@ contract ConstructorTest is Test {
         blackjack2.getBetAmount();
     }
 
-    function testInitValues() public {
-        uint draws = uint(
-            keccak256(
-                abi.encodePacked(
-                    block.prevrandao,
-                    block.timestamp,
-                    _dealer.counter
-                )
-            )
-        );
-        uint8[] memory actualPlayerCards = blackjack.getCardsFromHand(0);
-        uint8[] memory actualDealerCards = blackjack.getDealerCards();
-
-        assertEq(actualPlayerCards[1], uint8((draws % 13) + 1));
-        assertEq(actualPlayerCards[0], uint8((draws / 10000) % 13) + 1);
-        assertEq(actualDealerCards[0], uint8(((draws / 10000) % 13) + 1));
-    }
-
-    // function testInitialGameData() public {
-    //     assertEq(blackjack.gameData, (newHand, 1 ether, ));
-    //     assertEq(blackjack.getBetAmount(), 1 ether);
-    //     assertEq(blackjack.getInsurance(), false);
-    //     assertEq(blackjack.getNextOpenHandSlot(), 1);
-    //     assertEq(blackjack.gameData.hands[0].firstTurn, true);
-    // }
-
-    // function testInitialHand() public {
-    //     uint hand = uint(
+    // function testInitValues() public {
+    //     uint draws = uint(
     //         keccak256(
     //             abi.encodePacked(
-    //                 block.difficulty,
+    //                 block.prevrandao,
     //                 block.timestamp,
     //                 _dealer.counter
     //             )
     //         )
     //     );
-    //     unchecked {
-    //         uint8 pCardOne = uint8(hand % 13) + 1;
-    //         uint8 dealHand = uint8(((hand / 100) % 13) + 1);
-    //         uint8 pCardTwo = uint8((hand / 10000) % 13) + 1;
+    //     uint8[] memory actualPlayerCards = blackjack.getCardsFromHand(0);
+    //     emit log_string("Actual player cards: ");
+    //     emit log_uint(actualPlayerCards[1]);
+    //     emit log_uint(actualPlayerCards[0]);
 
-    //         assertEq(blackjack.gameData.dealerHand.cards[0], dealHand);
-    //         assertEq(blackjack.gameData.hands[0].cards[0], pCardOne);
-    //         assertEq(blackjack.gameData.hands[0].cards[1], pCardTwo);
-    //     }
+    //     uint8[] memory actualDealerCards = blackjack.getDealerCards();
+    //     emit log_string("Actual dealer cards: ");
+    //     emit log_uint(actualDealerCards[0]);
+
+    //     assertEq(actualPlayerCards[1], uint8((draws % 13) + 1));
+    //     assertEq(actualPlayerCards[0], uint8((draws / 10000) % 13) + 1);
+    //     assertEq(actualDealerCards[0], uint8(((draws / 10000) % 13) + 1));
     // }
+
+    function testInitialGameData() public {
+        assertEq(blackjack.getBetAmount(), 1 ether);
+        assertEq(blackjack.getInsurance(), false);
+        assertEq(blackjack.getNextOpenHandSlot(), 1);
+        assertEq(blackjack.getHands()[0].firstTurn, true);
+    }
 }

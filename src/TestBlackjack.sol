@@ -36,7 +36,7 @@ contract Blackjack is Ownable {
     address public player;
 
     constructor(address _vault, address _dealer) payable {
-        require(msg.value >= 0, "Need to place an initial bet!");
+        require(msg.value > 0, "Need to place an initial bet!");
         /*
            Set up the vault, generate random numbers for the hands and
            populate game data

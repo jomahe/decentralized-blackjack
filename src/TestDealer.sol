@@ -18,7 +18,7 @@ contract Dealer {
         owner = _newOwner;
     }
 
-    function random() external onlyOwner returns (uint) {
+    function random() external returns (uint) {
         counter++;
         return
             uint(
