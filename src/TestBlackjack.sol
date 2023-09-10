@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import {Dealer} from "./TestDealer.sol";
@@ -202,5 +202,38 @@ contract Blackjack is Ownable {
 
     function min(uint8 a, uint8 b) internal pure returns (uint8) {
         return (a < b) ? a : b;
+    }
+
+    //     struct GameData {
+    //     Hand[4] hands;
+    //     uint256 betAmount;
+    //     Hand dealerHand;
+    //     uint8 nextOpenHandSlot;
+    //     bool insurance;
+    // }
+    function getBetAmount() external view returns (uint256) {
+        return gameData.betAmount;
+    }
+
+    function getNextOpenHandSlot() external view returns (uint8) {
+        return gameData.nextOpenHandSlot;
+    }
+
+    function getInsurance() external view returns (bool) {
+        return gameData.insurance;
+    }
+
+    function getHands() external view returns (Hand[4] memory) {
+        return gameData.hands;
+    }
+
+    function getCardsFromHand(
+        uint8 handNum
+    ) external view returns (uint8[] memory) {
+        return gameData.hands[handNum].cards;
+    }
+
+    function getDealerCards() external view returns (uint8[] memory) {
+        return gameData.dealerHand.cards;
     }
 }

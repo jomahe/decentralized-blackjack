@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.19;
 
 contract Dealer {
-    uint counter = 1;
+    uint public counter = 1;
     address owner;
 
     constructor() {
@@ -23,7 +23,7 @@ contract Dealer {
         return
             uint(
                 keccak256(
-                    abi.encodePacked(block.difficulty, block.timestamp, counter)
+                    abi.encodePacked(block.prevrandao, block.timestamp, counter)
                 )
             );
     }
