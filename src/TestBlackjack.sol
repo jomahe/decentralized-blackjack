@@ -12,7 +12,7 @@ import {Dealer} from "./TestDealer.sol";
  */
 contract Blackjack is Ownable {
     event Hit(uint8);
-    event Split();
+    event Split(uint8);
     event Win(uint8);
     event Paid();
     event Push(uint8);
@@ -157,9 +157,9 @@ contract Blackjack is Ownable {
         uint8 handNum
     ) external payable onlyPlayer handValid(handNum) {
         uint8[] memory cards = gameData.hands[handNum].cards;
-        require(cards[0] == cards[1]);
-        require(msg.value == gameData.betAmount);
-        require(gameData.nextOpenHandSlot < 4); // Can only split to four hands
+        require(cards[0] == cards[1], "Need a pair in hand");
+        require(msg.value == gameData.betAmount, "Need to match original bet");
+        require(gameData.nextOpenHandSlot < 4, "Can only split to four hands");
 
         // Draw new cards for both hands
         uint newCards = dealer.random();
@@ -178,7 +178,7 @@ contract Blackjack is Ownable {
             finished: false
         });
 
-        emit Split();
+        emit Split(cards[0]);
     }
 
     function isBusted(uint8 handNum, bool _dealer) internal returns (bool) {
