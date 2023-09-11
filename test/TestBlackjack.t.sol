@@ -371,3 +371,54 @@ contract SplitTest is Test {
         );
     }
 }
+
+contract HandSumTest is Test {
+    Blackjack public blackjack;
+    Dealer public _dealer;
+
+    uint8[2] playerCards;
+    uint8[2] dealerCards;
+    Blackjack.Hand playerHand;
+    Blackjack.Hand dealerHand;
+
+    event Split(uint8);
+
+    function setUp() public {
+        _dealer = new Dealer();
+        vm.deal(address(this), 10 ether);
+        blackjack = new Blackjack{value: 1 ether}(
+            address(0x0),
+            address(_dealer)
+        );
+        _dealer.transferOwner(address(blackjack));
+        blackjack.setPlayerCards(8, 8, 0);
+    }
+
+    function testAces() public {
+        blackjack.setPlayerCards(1, 1, 0);
+        uint8[] memory aces = new uint8[](5);
+        aces[0] = 1;
+        aces[1] = 1;
+        aces[2] = 1;
+        aces[3] = 1;
+        aces[4] = 1;
+        blackjack.addPlayerCards(aces, 0);
+
+        assertEq(blackjack.getHandSum(0, false), 17);
+    }
+
+    function testSoftSeventeen() public {
+        blackjack.setPlayerCards(1, 6, 0);
+        assertEq(blackjack.getHandSum(0, false), 17);
+    }
+
+    function testHardSeventeen() public {
+        blackjack.setPlayerCards(10, 5, 0);
+        uint8[] memory aces = new uint8[](2);
+        aces[0] = 1;
+        aces[1] = 1;
+        blackjack.addPlayerCards(aces, 0);
+
+        assertEq(blackjack.getHandSum(0, false), 17);
+    }
+}

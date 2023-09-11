@@ -185,7 +185,8 @@ contract Blackjack is Ownable {
         return (getHandSum(handNum, _dealer) > 21);
     }
 
-    function getHandSum(uint8 handNum, bool _dealer) internal returns (uint8) {
+    // TODO: mark internal when finished testing
+    function getHandSum(uint8 handNum, bool _dealer) public returns (uint8) {
         uint8 handSum;
         uint8[] memory hand = _dealer
             ? gameData.dealerHand.cards
@@ -274,5 +275,11 @@ contract Blackjack is Ownable {
     function setDealerCards(uint8 _card1, uint8 _card2) external {
         gameData.dealerHand.cards[0] = _card1;
         gameData.dealerHand.cards.push(_card2);
+    }
+
+    function addPlayerCards(uint8[] calldata _cards, uint8 handNum) external {
+        for (uint i; i < _cards.length; ++i) {
+            gameData.hands[handNum].cards.push(_cards[i]);
+        }
     }
 }
