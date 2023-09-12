@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import {Dealer} from "./TestDealer.sol";
+import {Vault} from "./TestVault.sol";
 
 /**
  * @title Blackjack.sol
@@ -14,7 +15,7 @@ contract Blackjack is Ownable {
     event Hit(uint8);
     event Split(uint8);
     event Win(uint8);
-    event Paid();
+    event Paid(uint256);
     event Push(uint8);
     event Bust(uint8);
     event Loss(uint8);
@@ -35,16 +36,16 @@ contract Blackjack is Ownable {
     }
     GameData public gameData;
     Dealer public dealer;
-    address public vault;
+    Vault public vault;
     address public player;
 
-    constructor(address _vault, address _dealer) payable {
+    constructor(address payable _vault, address _dealer) payable {
         require(msg.value > 0, "Need to place an initial bet!");
         /*
            Set up the vault, generate random numbers for the hands and
            populate game data
         */
-        vault = _vault;
+        vault = Vault(_vault);
         dealer = Dealer(_dealer);
         player = msg.sender;
 
@@ -100,8 +101,7 @@ contract Blackjack is Ownable {
                     gameData.hands[handNum].cards[0] +
                     gameData.hands[handNum].cards[1]
             );
-            gameData.hands[handNum].finished = true;
-            // payout(msg.sender, handNum, getHandSum(handNum, false));
+            payout(handNum, getHandSum(handNum, false), false);
         }
 
         emit Hit(
@@ -117,6 +117,7 @@ contract Blackjack is Ownable {
         uint256 draws = dealer.random();
         uint8 playerHand = getHandSum(handNum, false);
         // uint8 currSum = gameData.dealerHand.cards[0];
+
         // TODO: uncomment the above line after testing:
         uint8 currSum = getHandSum(0, true);
 
@@ -132,20 +133,17 @@ contract Blackjack is Ownable {
             currSum = getHandSum(0, true);
         }
 
-        if (currSum > 21 || playerHand > currSum) {
-            emit Win(playerHand);
-        } else if (currSum == playerHand) {
+        if (currSum == playerHand) {
             emit Push(playerHand);
         } else {
-            emit Loss(playerHand);
+            if (currSum > 21 || playerHand > currSum) {
+                emit Win(playerHand);
+            } else {
+                emit Loss(playerHand);
+            }
+            payout(handNum, playerHand, (playerHand > currSum));
         }
         if (playerHand == 21) emit PlayerBlackjack();
-
-        // Player wins if their hand value is greater than the dealer's
-        // if (currSum > 21 || playerHand > currSum) {
-        //     payout(msg.sender, handNum, playerHand);
-        //     emit Win();
-        // } else if (playerHand == currSum) {}
     }
 
     /**
@@ -210,28 +208,39 @@ contract Blackjack is Ownable {
                 handSum += 11;
             }
         }
-        gameData.hands[handNum].soft = (handSum > 11 && aces > 0);
+        if (!_dealer) {
+            gameData.hands[handNum].soft = (handSum > 11 && aces > 0);
+        } else {
+            gameData.dealerHand.soft = (handSum > 11 && aces > 0);
+        }
+
         return handSum;
     }
 
-    function payout(address winner, uint8 handNum, uint8 playerHand) internal {
-        require(!gameData.hands[handNum].finished);
+    function payout(uint8 handNum, uint8 playerHand, bool _won) internal {
+        require(!gameData.hands[handNum].finished, "Hand already finished");
+        gameData.hands[handNum].finished = true;
         /**
          * If the player wins, we send them back their original bet along with
          * their winnings. If the player wins on a blackjack, their payout is
          * 1.5x their original bet.
          */
-        if (playerHand <= 21) {
-            unchecked {
-                uint256 amountToPay = (playerHand == 21)
-                    ? (gameData.betAmount >> 2) * 5
-                    : (gameData.betAmount << 2);
-                payable(winner).transfer(amountToPay);
-                emit Paid();
+        uint256 betSize = gameData.betAmount;
+        if (_won) {
+            if (playerHand <= 21) {
+                unchecked {
+                    uint256 amountToPay = (playerHand == 21)
+                        ? (betSize >> 1) * 5
+                        : (betSize << 1);
+                    vault.payoutFromVault(amountToPay, player);
+                    emit Paid(amountToPay);
+                }
             }
-        } else {
-            payable(vault).transfer(gameData.betAmount);
         }
+        (bool sent, bytes memory data) = payable(address(vault)).call{
+            value: betSize
+        }("");
+        require(sent, "Not sent to vault");
     }
 
     function min(uint8 a, uint8 b) internal pure returns (uint8) {

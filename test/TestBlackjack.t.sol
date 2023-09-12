@@ -4,10 +4,12 @@ pragma solidity 0.8.21;
 import {Test, console2} from "forge-std/Test.sol";
 import {Blackjack} from "../src/TestBlackjack.sol";
 import {Dealer} from "../src/TestDealer.sol";
+import {Vault} from "../src/TestVault.sol";
 
 contract ConstructorTest is Test {
     Blackjack public blackjack;
     Dealer public _dealer;
+    Vault public vault;
 
     uint8[2] playerCards;
     uint8[2] dealerCards;
@@ -17,11 +19,14 @@ contract ConstructorTest is Test {
     function setUp() public {
         _dealer = new Dealer();
         vm.deal(address(this), 10 ether);
+        vault = new Vault();
+        vm.deal(address(vault), 10 ether);
         blackjack = new Blackjack{value: 1 ether}(
-            address(0x0),
+            payable(address(vault)),
             address(_dealer)
         );
         _dealer.transferOwner(address(blackjack));
+        vault.addAuthorized(address(blackjack));
 
         // Setting up initial hands
         uint draws = uint(
@@ -50,7 +55,7 @@ contract ConstructorTest is Test {
 
     function testFailNoValue() public {
         Blackjack blackjack2 = new Blackjack{value: 0}(
-            address(0x0),
+            payable(address(vault)),
             address(_dealer)
         );
         blackjack2.getBetAmount();
@@ -91,6 +96,7 @@ contract ConstructorTest is Test {
 contract HitTest is Test {
     Blackjack public blackjack;
     Dealer public _dealer;
+    Vault public vault;
 
     uint8[2] playerCards;
     uint8[2] dealerCards;
@@ -103,11 +109,14 @@ contract HitTest is Test {
     function setUp() public {
         _dealer = new Dealer();
         vm.deal(address(this), 10 ether);
+        vault = new Vault();
+        vm.deal(address(vault), 10 ether);
         blackjack = new Blackjack{value: 1 ether}(
-            address(0x0),
+            payable(address(vault)),
             address(_dealer)
         );
         _dealer.transferOwner(address(blackjack));
+        vault.addAuthorized(address(blackjack));
     }
 
     function testInsuranceTrue() public {
@@ -172,6 +181,7 @@ contract HitTest is Test {
 contract StandTest is Test {
     Blackjack public blackjack;
     Dealer public _dealer;
+    Vault public vault;
 
     uint8[2] playerCards;
     uint8[2] dealerCards;
@@ -183,16 +193,20 @@ contract StandTest is Test {
     event Win(uint8);
     event Push(uint8);
     event Loss(uint8);
+    event Paid(uint256);
     event PlayerBlackjack();
 
     function setUp() public {
         _dealer = new Dealer();
         vm.deal(address(this), 10 ether);
+        vault = new Vault();
+        vm.deal(address(vault), 10 ether);
         blackjack = new Blackjack{value: 1 ether}(
-            address(0x0),
+            payable(address(vault)),
             address(_dealer)
         );
         _dealer.transferOwner(address(blackjack));
+        vault.addAuthorized(address(blackjack));
     }
 
     function testPlayerBlackJack() public {
@@ -200,6 +214,8 @@ contract StandTest is Test {
         blackjack.setDealerCards(10, 7);
         vm.expectEmit(false, false, false, false);
         emit Win(21);
+        vm.expectEmit(false, false, false, false);
+        emit Paid(1);
         vm.expectEmit(false, false, false, false);
         emit PlayerBlackjack();
         blackjack.stand(0);
@@ -228,11 +244,14 @@ contract StandTest is Test {
         emit Loss(17);
         blackjack.stand(0);
     }
+
+    receive() external payable {}
 }
 
 contract SplitTest is Test {
     Blackjack public blackjack;
     Dealer public _dealer;
+    Vault public vault;
 
     uint8[2] playerCards;
     uint8[2] dealerCards;
@@ -244,11 +263,14 @@ contract SplitTest is Test {
     function setUp() public {
         _dealer = new Dealer();
         vm.deal(address(this), 10 ether);
+        vault = new Vault();
+        vm.deal(address(vault), 10 ether);
         blackjack = new Blackjack{value: 1 ether}(
-            address(0x0),
+            payable(address(vault)),
             address(_dealer)
         );
         _dealer.transferOwner(address(blackjack));
+        vault.addAuthorized(address(blackjack));
         blackjack.setPlayerCards(8, 8, 0);
     }
 
@@ -375,6 +397,7 @@ contract SplitTest is Test {
 contract HandSumTest is Test {
     Blackjack public blackjack;
     Dealer public _dealer;
+    Vault public vault;
 
     uint8[2] playerCards;
     uint8[2] dealerCards;
@@ -386,11 +409,14 @@ contract HandSumTest is Test {
     function setUp() public {
         _dealer = new Dealer();
         vm.deal(address(this), 10 ether);
+        vault = new Vault();
+        vm.deal(address(vault), 10 ether);
         blackjack = new Blackjack{value: 1 ether}(
-            address(0x0),
+            payable(address(vault)),
             address(_dealer)
         );
         _dealer.transferOwner(address(blackjack));
+        vault.addAuthorized(address(blackjack));
         blackjack.setPlayerCards(8, 8, 0);
     }
 
@@ -421,4 +447,113 @@ contract HandSumTest is Test {
 
         assertEq(blackjack.getHandSum(0, false), 17);
     }
+}
+
+contract PayoutTest is Test {
+    Blackjack public blackjack;
+    Dealer public _dealer;
+    Vault public vault;
+
+    uint8[2] playerCards;
+    uint8[2] dealerCards;
+    Blackjack.Hand playerHand;
+    Blackjack.Hand dealerHand;
+
+    event Win(uint256);
+    event Loss(uint8);
+    event Push(uint8);
+    event EtherReceived(uint256);
+    event Paid(uint256);
+
+    function setUp() public {
+        _dealer = new Dealer();
+        vm.deal(address(this), 10 ether);
+        vault = new Vault();
+        vm.deal(address(vault), 10 ether);
+        blackjack = new Blackjack{value: 1 ether}(
+            payable(address(vault)),
+            address(_dealer)
+        );
+        _dealer.transferOwner(address(blackjack));
+        vault.addAuthorized(address(blackjack));
+    }
+
+    function testWinPayoutNormal() public {
+        blackjack.setDealerCards(10, 7);
+        blackjack.setPlayerCards(10, 8, 0);
+
+        vm.expectEmit(false, false, false, false);
+        emit Paid(1 ether);
+        blackjack.stand(0);
+
+        assertEq(address(vault).balance, 9 ether);
+    }
+
+    function testWinPayoutBlackjack() public {
+        blackjack.setDealerCards(10, 7);
+        blackjack.setPlayerCards(10, 1, 0);
+
+        vm.expectEmit(false, false, false, false);
+        emit Paid(1.5 ether);
+        blackjack.stand(0);
+
+        assertEq(address(vault).balance, 8.5 ether);
+    }
+
+    function testLoss() public {
+        blackjack.setDealerCards(10, 7);
+        blackjack.setPlayerCards(10, 2, 0);
+        blackjack.stand(0);
+
+        assertEq(address(vault).balance, 11 ether);
+    }
+
+    function testMultipleHands() public {
+        blackjack.setDealerCards(10, 7);
+        blackjack.setPlayerCards(9, 9, 0);
+
+        blackjack.split{value: 1 ether}(0);
+
+        blackjack.setPlayerCards(9, 9, 0);
+        blackjack.setPlayerCards(9, 9, 1);
+
+        blackjack.split{value: 1 ether}(0);
+        blackjack.split{value: 1 ether}(1);
+
+        blackjack.setPlayerCards(9, 9, 0);
+        blackjack.setPlayerCards(9, 8, 1);
+        blackjack.setPlayerCards(9, 7, 2);
+        blackjack.setPlayerCards(10, 1, 3);
+
+        vm.expectEmit(false, false, false, false);
+        emit Win(1);
+        vm.expectEmit(false, false, false, false);
+        emit Paid(1 ether);
+        vm.expectEmit(false, false, false, false);
+        emit EtherReceived(1 ether);
+        blackjack.stand(0);
+        // require(address(vault).balance == 9 ether, "Balance incorrect");
+        // assertEq(address(vault).balance, 9 ether, "");
+
+        vm.expectEmit(false, false, false, false);
+        emit Push(1);
+        blackjack.stand(1);
+        assertEq(address(vault).balance, 9 ether);
+
+        vm.expectEmit(false, false, false, false);
+        emit Loss(1);
+        vm.expectEmit(false, false, false, false);
+        emit EtherReceived(1 ether);
+        blackjack.stand(2);
+        assertEq(address(vault).balance, 10 ether);
+
+        vm.expectEmit(false, false, false, false);
+        emit Win(1);
+        vm.expectEmit(false, false, false, false);
+        emit Paid(1 ether);
+        blackjack.stand(3);
+        assertEq(address(vault).balance, 8.5 ether);
+    }
+
+    receive() external payable {}
 }
