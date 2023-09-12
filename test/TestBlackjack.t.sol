@@ -459,7 +459,7 @@ contract PayoutTest is Test {
     Blackjack.Hand playerHand;
     Blackjack.Hand dealerHand;
 
-    event Win(uint256);
+    event Win(uint8);
     event Loss(uint8);
     event Push(uint8);
     event EtherReceived(uint256);
@@ -533,7 +533,7 @@ contract PayoutTest is Test {
         emit EtherReceived(1 ether);
         blackjack.stand(0);
         // require(address(vault).balance == 9 ether, "Balance incorrect");
-        // assertEq(address(vault).balance, 9 ether, "");
+        assertEq(address(vault).balance, 9 ether);
 
         vm.expectEmit(false, false, false, false);
         emit Push(1);
