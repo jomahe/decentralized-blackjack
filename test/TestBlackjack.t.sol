@@ -218,7 +218,7 @@ contract StandTest is Test {
         emit Paid(1);
         vm.expectEmit(false, false, false, false);
         emit PlayerBlackjack();
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
     }
 
     function testWinNoBlackjack() public {
@@ -226,7 +226,7 @@ contract StandTest is Test {
         blackjack.setDealerCards(10, 7);
         vm.expectEmit(false, false, false, false);
         emit Win(18);
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
     }
 
     function testPush() public {
@@ -234,7 +234,7 @@ contract StandTest is Test {
         blackjack.setDealerCards(10, 7);
         vm.expectEmit(false, false, false, false);
         emit Push(17);
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
     }
 
     function testLoss() public {
@@ -242,7 +242,7 @@ contract StandTest is Test {
         blackjack.setDealerCards(10, 1);
         vm.expectEmit(false, false, false, false);
         emit Loss(17);
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
     }
 
     receive() external payable {}
@@ -484,7 +484,7 @@ contract PayoutTest is Test {
 
         vm.expectEmit(false, false, false, false);
         emit Paid(1 ether);
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
 
         assertEq(address(vault).balance, 9 ether);
     }
@@ -495,7 +495,7 @@ contract PayoutTest is Test {
 
         vm.expectEmit(false, false, false, false);
         emit Paid(1.5 ether);
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
 
         assertEq(address(vault).balance, 8.5 ether);
     }
@@ -503,7 +503,7 @@ contract PayoutTest is Test {
     function testLoss() public {
         blackjack.setDealerCards(10, 7);
         blackjack.setPlayerCards(10, 2, 0);
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
 
         assertEq(address(vault).balance, 11 ether);
     }
@@ -531,27 +531,27 @@ contract PayoutTest is Test {
         emit Paid(1 ether);
         vm.expectEmit(false, false, false, false);
         emit EtherReceived(1 ether);
-        blackjack.stand(0);
+        blackjack.stand(false, 0);
         // require(address(vault).balance == 9 ether, "Balance incorrect");
         assertEq(address(vault).balance, 9 ether);
 
         vm.expectEmit(false, false, false, false);
         emit Push(1);
-        blackjack.stand(1);
+        blackjack.stand(false, 1);
         assertEq(address(vault).balance, 9 ether);
 
         vm.expectEmit(false, false, false, false);
         emit Loss(1);
         vm.expectEmit(false, false, false, false);
         emit EtherReceived(1 ether);
-        blackjack.stand(2);
+        blackjack.stand(false, 2);
         assertEq(address(vault).balance, 10 ether);
 
         vm.expectEmit(false, false, false, false);
         emit Win(1);
         vm.expectEmit(false, false, false, false);
         emit Paid(1 ether);
-        blackjack.stand(3);
+        blackjack.stand(false, 3);
         assertEq(address(vault).balance, 8.5 ether);
     }
 

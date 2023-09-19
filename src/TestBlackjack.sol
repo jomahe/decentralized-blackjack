@@ -11,6 +11,7 @@ import {Vault} from "./TestVault.sol";
  * @notice This is a contract implementing the functionality of the game
  * Blackjack.
  */
+// TODO: Implement Doubling down
 contract Blackjack is Ownable {
     event Hit(uint8);
     event Split(uint8);
@@ -30,6 +31,7 @@ contract Blackjack is Ownable {
     struct GameData {
         Hand[4] hands;
         uint256 betAmount;
+        uint256 doubleDownAmount;
         Hand dealerHand;
         uint8 nextOpenHandSlot;
         bool insurance;
@@ -80,16 +82,8 @@ contract Blackjack is Ownable {
         uint8 handNum
     ) external payable onlyPlayer handValid(handNum) returns (uint8) {
         // Function logic
-        if (_insurance) {
-            require(
-                gameData.hands[handNum].firstTurn &&
-                    msg.value == gameData.betAmount &&
-                    gameData.dealerHand.cards[0] == 1 &&
-                    !gameData.hands[handNum].finished
-            );
-            gameData.insurance = true;
-            gameData.betAmount <<= 1;
-        }
+        if (_insurance) buyInsurance(handNum);
+        gameData.hands[handNum].firstTurn = false;
         // Generate random number, add new card to hand and update handSum
         uint8 newCard = uint8(dealer.random() % 13) + 1;
         gameData.hands[handNum].cards.push(newCard);
@@ -101,7 +95,7 @@ contract Blackjack is Ownable {
                     gameData.hands[handNum].cards[0] +
                     gameData.hands[handNum].cards[1]
             );
-            payout(handNum, getHandSum(handNum, false), false);
+            payout(handNum, getHandSum(handNum, false), 21);
         }
 
         emit Hit(
@@ -112,7 +106,12 @@ contract Blackjack is Ownable {
         return newCard;
     }
 
-    function stand(uint8 handNum) external onlyPlayer handValid(handNum) {
+    function stand(
+        bool _insurance,
+        uint8 handNum
+    ) external payable onlyPlayer handValid(handNum) {
+        if (_insurance) buyInsurance(handNum);
+        gameData.hands[handNum].firstTurn = false;
         // Dealer draws second card, keeps drawing until bust or sum greater than player's
         uint256 draws = dealer.random();
         uint8 playerHand = getHandSum(handNum, false);
@@ -141,7 +140,7 @@ contract Blackjack is Ownable {
             } else {
                 emit Loss(playerHand);
             }
-            payout(handNum, playerHand, (playerHand > currSum));
+            payout(handNum, playerHand, currSum);
         }
         if (playerHand == 21) emit PlayerBlackjack();
     }
@@ -177,6 +176,33 @@ contract Blackjack is Ownable {
         });
 
         emit Split(cards[0]);
+    }
+
+    function buyInsurance(uint8 handNum) internal {
+        GameData memory _gameData = gameData;
+        require(
+            handNum == 0 &&
+                _gameData.dealerHand.cards[0] == 1 &&
+                _gameData.hands[handNum].firstTurn &&
+                msg.value == _gameData.betAmount
+        );
+        gameData.insurance = true;
+        // We don't increase the bet amount here; just check at the time of payout
+    }
+
+    function doubleDown(uint8 handNum) external payable {
+        /** We allow the player to double down on the first action of each hand
+         *  if it has a value of 9, 10, or 11.
+         */
+        GameData memory _gameData = gameData;
+        uint8 handVal = getHandSum(handNum, false);
+        require(
+            _gameData.hands[handNum].firstTurn =
+                true &&
+                handVal - 9 <= 2 &&
+                msg.value <= _gameData.betAmount
+        );
+        gameData.doubleDownAmount = msg.value;
     }
 
     function isBusted(uint8 handNum, bool _dealer) internal returns (bool) {
@@ -217,29 +243,47 @@ contract Blackjack is Ownable {
         return handSum;
     }
 
-    function payout(uint8 handNum, uint8 playerHand, bool _won) internal {
-        require(!gameData.hands[handNum].finished, "Hand already finished");
+    function payout(
+        uint8 handNum,
+        uint8 playerHand,
+        uint8 dealerHand
+    ) internal {
+        GameData memory _gameData = gameData;
+        require(!_gameData.hands[handNum].finished, "Hand already finished");
         gameData.hands[handNum].finished = true;
         /**
          * If the player wins, we send them back their original bet along with
          * their winnings. If the player wins on a blackjack, their payout is
          * 1.5x their original bet.
          */
-        uint256 betSize = gameData.betAmount;
-        if (_won) {
+        uint256 betSize = _gameData.betAmount;
+        uint256 amountToPay;
+        if (playerHand > dealerHand && !isBusted(handNum, false)) {
             if (playerHand <= 21) {
                 unchecked {
-                    uint256 amountToPay = (playerHand == 21)
+                    // Natural blackjack is paid out at 3:2
+                    amountToPay = (playerHand == 21 &&
+                        _gameData.hands[handNum].cards.length == 2)
                         ? (betSize >> 1) * 5
                         : (betSize << 1);
-                    vault.payoutFromVault(amountToPay, player);
-                    emit Paid(amountToPay);
                 }
             }
         }
-        (bool sent, bytes memory data) = payable(address(vault)).call{
-            value: betSize
-        }("");
+        // If the player wins their insurance bet they're paid out at 2:1
+        if (
+            _gameData.dealerHand.cards.length == 2 &&
+            dealerHand == 21 &&
+            _gameData.insurance
+        ) {
+            amountToPay += (betSize << 1);
+        }
+
+        // If the player doubled down we pay them their double down amount
+        amountToPay += _gameData.doubleDownAmount << 1;
+        vault.payoutFromVault(amountToPay, player);
+        if (amountToPay > 0) emit Paid(amountToPay);
+
+        (bool sent, ) = payable(address(vault)).call{value: betSize}("");
         require(sent, "Not sent to vault");
     }
 
