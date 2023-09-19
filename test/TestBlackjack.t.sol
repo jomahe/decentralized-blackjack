@@ -559,3 +559,72 @@ contract PayoutTest is Test {
 
     receive() external payable {}
 }
+
+contract InsuranceTest is Test {
+    Blackjack public blackjack;
+    Dealer public _dealer;
+    Vault public vault;
+
+    uint8[2] playerCards;
+    uint8[2] dealerCards;
+    Blackjack.Hand playerHand;
+    Blackjack.Hand dealerHand;
+
+    event Win(uint8);
+    event Loss(uint8);
+    event Push(uint8);
+    event Hit(uint8);
+    event EtherReceived(uint256);
+    event Paid(uint256);
+
+    function setUp() public {
+        _dealer = new Dealer();
+        vm.deal(address(this), 10 ether);
+        vault = new Vault();
+        vm.deal(address(vault), 10 ether);
+        blackjack = new Blackjack{value: 1 ether}(
+            payable(address(vault)),
+            address(_dealer)
+        );
+        _dealer.transferOwner(address(blackjack));
+        vault.addAuthorized(address(blackjack));
+    }
+
+    // If the player loses after taking insurance
+    function testHitSuccessInsuranceTrue() public {
+        blackjack.setDealerCards(1, 10);
+        blackjack.setPlayerCards(1, 1, 0);
+        vm.expectEmit(false, false, false, false);
+        emit Hit(1);
+        blackjack.hit{value: 1 ether}(true, 0);
+
+        // Expect player to lose after standing, wins his money back
+        blackjack.stand(false, 0);
+        blackjack.cleanup();
+        assertEq(address(vault).balance, 10 ether);
+    }
+
+    // If the player has Blackjack and pushes after taking insurance
+    function testInsuranceBlackjackPush() public {
+        blackjack.setDealerCards(1, 10);
+        blackjack.setPlayerCards(1, 10, 0);
+
+        // Expect player to push after standing, ties and is paid out 2:1
+        blackjack.stand{value: 1 ether}(true, 0);
+        blackjack.cleanup();
+        assertEq(address(vault).balance, 9 ether);
+    }
+
+    // If the player has Blackjack and wins after taking insurance
+    function testInsuranceBlackjackWin() public {
+        blackjack.setDealerCards(1, 7);
+        blackjack.setPlayerCards(1, 10, 0);
+
+        // Expect player to win 1.5 ether after standing, loses 1 ether insurance
+        blackjack.stand{value: 1 ether}(true, 0);
+        blackjack.cleanup();
+        assertEq(address(vault).balance, 9.5 ether);
+    }
+
+    receive() external payable {}
+}

@@ -11,16 +11,16 @@ import {Vault} from "./TestVault.sol";
  * @notice This is a contract implementing the functionality of the game
  * Blackjack.
  */
-// TODO: Implement Doubling down
 contract Blackjack is Ownable {
+    // TODO: Look into throwing errors to save gas instead of require() statements
     event Hit(uint8);
     event Split(uint8);
-    event Win(uint8);
+    event Win(uint8, uint8);
     event Paid(uint256);
-    event Push(uint8);
-    event Bust(uint8);
-    event Loss(uint8);
-    event PlayerBlackjack();
+    event Push(uint8, uint8);
+    event Bust(uint8, uint8);
+    event Loss(uint8, uint8);
+    event PlayerBlackjack(uint8);
 
     struct Hand {
         uint8[] cards;
@@ -40,6 +40,7 @@ contract Blackjack is Ownable {
     Dealer public dealer;
     Vault public vault;
     address public player;
+    bool public paidOut;
 
     constructor(address payable _vault, address _dealer) payable {
         require(msg.value > 0, "Need to place an initial bet!");
@@ -65,6 +66,7 @@ contract Blackjack is Ownable {
         gameData.insurance = false;
         gameData.hands[0].firstTurn = true;
         gameData.nextOpenHandSlot = 1;
+        paidOut = false;
     }
 
     modifier handValid(uint8 handNum) {
@@ -106,22 +108,36 @@ contract Blackjack is Ownable {
         return newCard;
     }
 
+    function markFinished(bool _h0, bool _h1, bool _h2, bool _h3) external {
+        gameData.hands[0].finished = _h0;
+        gameData.hands[1].finished = _h1;
+        gameData.hands[2].finished = _h2;
+        gameData.hands[3].finished = _h3;
+    }
+
     function stand(
         bool _insurance,
         uint8 handNum
     ) external payable onlyPlayer handValid(handNum) {
+        // Need to make sure all hands are complete before revealing dealer's cards
+        GameData memory _gameData = gameData;
+        for (uint i; i < _gameData.nextOpenHandSlot; ++i) {
+            require(_gameData.hands[i].finished, "Not all hands are finished!");
+        }
+
         if (_insurance) buyInsurance(handNum);
         gameData.hands[handNum].firstTurn = false;
+
         // Dealer draws second card, keeps drawing until bust or sum greater than player's
         uint256 draws = dealer.random();
         uint8 playerHand = getHandSum(handNum, false);
-        // uint8 currSum = gameData.dealerHand.cards[0];
+        // uint8 currSum = _gameData.dealerHand.cards[0];
 
         // TODO: uncomment the above line after testing:
         uint8 currSum = getHandSum(0, true);
 
-        while (currSum <= min(21, playerHand)) {
-            // Dealer os forced to stop hitting at hard 17 or above
+        while (currSum <= 21) {
+            // Dealer is forced to stop hitting at hard 17 or above
             if (currSum >= 18 || (currSum == 17 && !gameData.dealerHand.soft)) {
                 break;
             }
@@ -132,17 +148,19 @@ contract Blackjack is Ownable {
             currSum = getHandSum(0, true);
         }
 
-        if (currSum == playerHand) {
-            emit Push(playerHand);
-        } else {
-            if (currSum > 21 || playerHand > currSum) {
-                emit Win(playerHand);
+        for (uint8 i; i < _gameData.nextOpenHandSlot; ++i) {
+            if (currSum == playerHand) {
+                emit Push(i, playerHand);
             } else {
-                emit Loss(playerHand);
+                if (currSum > 21 || playerHand > currSum) {
+                    emit Win(i, playerHand);
+                } else {
+                    emit Loss(i, playerHand);
+                }
             }
-            payout(handNum, playerHand, currSum);
+            if (playerHand == 21) emit PlayerBlackjack(i);
         }
-        if (playerHand == 21) emit PlayerBlackjack();
+        payout(handNum, playerHand, currSum);
     }
 
     /**
@@ -243,14 +261,15 @@ contract Blackjack is Ownable {
         return handSum;
     }
 
+    // TODO: Update payout function to pay out all hands at once since player can only stand once
     function payout(
         uint8 handNum,
         uint8 playerHand,
         uint8 dealerHand
     ) internal {
+        require(!paidOut, "Player already paid out!");
+        paidOut = true;
         GameData memory _gameData = gameData;
-        require(!_gameData.hands[handNum].finished, "Hand already finished");
-        gameData.hands[handNum].finished = true;
         /**
          * If the player wins, we send them back their original bet along with
          * their winnings. If the player wins on a blackjack, their payout is
@@ -258,48 +277,45 @@ contract Blackjack is Ownable {
          */
         uint256 betSize = _gameData.betAmount;
         uint256 amountToPay;
-        if (playerHand > dealerHand && !isBusted(handNum, false)) {
-            if (playerHand <= 21) {
-                unchecked {
-                    // Natural blackjack is paid out at 3:2
-                    amountToPay = (playerHand == 21 &&
-                        _gameData.hands[handNum].cards.length == 2)
-                        ? (betSize >> 1) * 5
-                        : (betSize << 1);
+
+        for (uint8 handNum; handNum < _gameData.nextOpenHandSlot; ++handNum) {
+            if (playerHand > dealerHand && !isBusted(handNum, false)) {
+                if (playerHand <= 21) {
+                    unchecked {
+                        // Natural blackjack is paid out at 3:2
+                        amountToPay += (playerHand == 21 &&
+                            _gameData.hands[handNum].cards.length == 2)
+                            ? (betSize >> 1) * 5
+                            : (betSize << 1);
+                    }
                 }
+            } else if (playerHand == dealerHand) {
+                amountToPay += betSize;
             }
         }
+
         // If the player wins their insurance bet they're paid out at 2:1
         if (
             _gameData.dealerHand.cards.length == 2 &&
             dealerHand == 21 &&
-            _gameData.insurance
+            _gameData.insurance &&
         ) {
             amountToPay += (betSize << 1);
         }
 
         // If the player doubled down we pay them their double down amount
         amountToPay += (_gameData.doubleDownAmount << 1);
+
         vault.payoutFromVault(amountToPay, player);
         if (amountToPay > 0) emit Paid(amountToPay);
 
-        (bool sent, ) = payable(address(vault)).call{value: betSize}("");
+        // Send what's left of the funds to the vault
+        (bool sent, ) = payable(address(vault)).call{value: address(this).balance}("");
         require(sent, "Not sent to vault");
     }
 
     function min(uint8 a, uint8 b) internal pure returns (uint8) {
         return (a < b) ? a : b;
-    }
-
-    function cleanup() external {
-        GameData memory _gameData = gameData;
-        for (uint i; i < _gameData.nextOpenHandSlot; ++i) {
-            require(_gameData.hands[0].finished, "Game not finished");
-        }
-        (bool sent, ) = payable(address(vault)).call{
-            value: address(this).balance
-        }("");
-        require(sent, "Not sent to vault");
     }
 
     /** /////////////////////////////////////////
