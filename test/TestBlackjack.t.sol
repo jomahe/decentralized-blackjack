@@ -176,6 +176,8 @@ contract HitTest is Test {
         emit Hit(1);
         blackjack.hit{value: 1 ether}(true, 0);
     }
+
+    receive() external payable {}
 }
 
 contract StandTest is Test {

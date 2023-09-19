@@ -279,7 +279,7 @@ contract Blackjack is Ownable {
         }
 
         // If the player doubled down we pay them their double down amount
-        amountToPay += _gameData.doubleDownAmount << 1;
+        amountToPay += (_gameData.doubleDownAmount << 1);
         vault.payoutFromVault(amountToPay, player);
         if (amountToPay > 0) emit Paid(amountToPay);
 
@@ -289,6 +289,17 @@ contract Blackjack is Ownable {
 
     function min(uint8 a, uint8 b) internal pure returns (uint8) {
         return (a < b) ? a : b;
+    }
+
+    function cleanup() external {
+        GameData memory _gameData = gameData;
+        for (uint i; i < _gameData.nextOpenHandSlot; ++i) {
+            require(_gameData.hands[0].finished, "Game not finished");
+        }
+        (bool sent, ) = payable(address(vault)).call{
+            value: address(this).balance
+        }("");
+        require(sent, "Not sent to vault");
     }
 
     /** /////////////////////////////////////////
