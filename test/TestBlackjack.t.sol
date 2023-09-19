@@ -103,8 +103,8 @@ contract HitTest is Test {
     Blackjack.Hand playerHand;
     Blackjack.Hand dealerHand;
 
-    event Hit(uint8);
-    event Bust(uint8);
+    event Hit(uint8, uint8);
+    event Bust(uint8, uint8);
 
     function setUp() public {
         _dealer = new Dealer();
@@ -144,7 +144,7 @@ contract HitTest is Test {
     function testHitSuccessful() public {
         blackjack.setPlayerCards(1, 1, 0);
         vm.expectEmit(false, false, false, false);
-        emit Hit(1);
+        emit Hit(1, 1);
         uint8 newCard = blackjack.hit(false, 0);
 
         emit log_uint(newCard);
@@ -154,9 +154,9 @@ contract HitTest is Test {
         // Expect this test to fail 1/13 times because the player will draw an Ace
         blackjack.setPlayerCards(10, 10, 0);
         vm.expectEmit(false, false, false, false);
-        emit Bust(1);
+        emit Bust(1, 1);
         vm.expectEmit(false, false, false, false);
-        emit Hit(1);
+        emit Hit(1, 1);
         blackjack.hit(false, 0);
     }
 
@@ -173,7 +173,7 @@ contract HitTest is Test {
         blackjack.setDealerCards(1, 1);
         blackjack.setPlayerCards(1, 1, 0);
         vm.expectEmit(false, false, false, false);
-        emit Hit(1);
+        emit Hit(1, 1);
         blackjack.hit{value: 1 ether}(true, 0);
     }
 
@@ -191,10 +191,10 @@ contract StandTest is Test {
     Blackjack.Hand dealerHand;
 
     event Hit(uint8);
-    event Bust(uint8);
-    event Win(uint8);
-    event Push(uint8);
-    event Loss(uint8);
+    event Bust(uint8, uint8);
+    event Win(uint8, uint8);
+    event Push(uint8, uint8);
+    event Loss(uint8, uint8);
     event Paid(uint256);
     event PlayerBlackjack();
 
@@ -215,36 +215,36 @@ contract StandTest is Test {
         blackjack.setPlayerCards(1, 10, 0);
         blackjack.setDealerCards(10, 7);
         vm.expectEmit(false, false, false, false);
-        emit Win(21);
+        emit Win(21, 1);
         vm.expectEmit(false, false, false, false);
         emit Paid(1);
         vm.expectEmit(false, false, false, false);
         emit PlayerBlackjack();
-        blackjack.stand(false, 0);
+        blackjack.stand(false);
     }
 
     function testWinNoBlackjack() public {
         blackjack.setPlayerCards(10, 8, 0);
         blackjack.setDealerCards(10, 7);
         vm.expectEmit(false, false, false, false);
-        emit Win(18);
-        blackjack.stand(false, 0);
+        emit Win(18, 1);
+        blackjack.stand(false);
     }
 
     function testPush() public {
         blackjack.setPlayerCards(10, 7, 0);
         blackjack.setDealerCards(10, 7);
         vm.expectEmit(false, false, false, false);
-        emit Push(17);
-        blackjack.stand(false, 0);
+        emit Push(17, 1);
+        blackjack.stand(false);
     }
 
     function testLoss() public {
         blackjack.setPlayerCards(10, 7, 0);
         blackjack.setDealerCards(10, 1);
         vm.expectEmit(false, false, false, false);
-        emit Loss(17);
-        blackjack.stand(false, 0);
+        emit Loss(17, 1);
+        blackjack.stand(false);
     }
 
     receive() external payable {}
@@ -461,9 +461,9 @@ contract PayoutTest is Test {
     Blackjack.Hand playerHand;
     Blackjack.Hand dealerHand;
 
-    event Win(uint8);
-    event Loss(uint8);
-    event Push(uint8);
+    event Win(uint8, uint8);
+    event Loss(uint8, uint8);
+    event Push(uint8, uint8);
     event EtherReceived(uint256);
     event Paid(uint256);
 
@@ -486,7 +486,7 @@ contract PayoutTest is Test {
 
         vm.expectEmit(false, false, false, false);
         emit Paid(1 ether);
-        blackjack.stand(false, 0);
+        blackjack.stand(false);
 
         assertEq(address(vault).balance, 9 ether);
     }
@@ -497,7 +497,7 @@ contract PayoutTest is Test {
 
         vm.expectEmit(false, false, false, false);
         emit Paid(1.5 ether);
-        blackjack.stand(false, 0);
+        blackjack.stand(false);
 
         assertEq(address(vault).balance, 8.5 ether);
     }
@@ -505,7 +505,7 @@ contract PayoutTest is Test {
     function testLoss() public {
         blackjack.setDealerCards(10, 7);
         blackjack.setPlayerCards(10, 2, 0);
-        blackjack.stand(false, 0);
+        blackjack.stand(false);
 
         assertEq(address(vault).balance, 11 ether);
     }
@@ -528,32 +528,22 @@ contract PayoutTest is Test {
         blackjack.setPlayerCards(10, 1, 3);
 
         vm.expectEmit(false, false, false, false);
-        emit Win(1);
+        emit Win(1, 1);
         vm.expectEmit(false, false, false, false);
         emit Paid(1 ether);
         vm.expectEmit(false, false, false, false);
         emit EtherReceived(1 ether);
-        blackjack.stand(false, 0);
-        // require(address(vault).balance == 9 ether, "Balance incorrect");
-        assertEq(address(vault).balance, 9 ether);
-
         vm.expectEmit(false, false, false, false);
-        emit Push(1);
-        blackjack.stand(false, 1);
-        assertEq(address(vault).balance, 9 ether);
-
+        emit Push(1, 1);
         vm.expectEmit(false, false, false, false);
-        emit Loss(1);
+        emit Loss(1, 1);
         vm.expectEmit(false, false, false, false);
         emit EtherReceived(1 ether);
-        blackjack.stand(false, 2);
-        assertEq(address(vault).balance, 10 ether);
-
         vm.expectEmit(false, false, false, false);
-        emit Win(1);
+        emit Win(1, 1);
         vm.expectEmit(false, false, false, false);
         emit Paid(1 ether);
-        blackjack.stand(false, 3);
+        blackjack.stand(false);
         assertEq(address(vault).balance, 8.5 ether);
     }
 
@@ -570,9 +560,9 @@ contract InsuranceTest is Test {
     Blackjack.Hand playerHand;
     Blackjack.Hand dealerHand;
 
-    event Win(uint8);
-    event Loss(uint8);
-    event Push(uint8);
+    event Win(uint8, uint8);
+    event Loss(uint8, uint8);
+    event Push(uint8, uint8);
     event Hit(uint8);
     event EtherReceived(uint256);
     event Paid(uint256);
@@ -599,8 +589,7 @@ contract InsuranceTest is Test {
         blackjack.hit{value: 1 ether}(true, 0);
 
         // Expect player to lose after standing, wins his money back
-        blackjack.stand(false, 0);
-        blackjack.cleanup();
+        blackjack.stand(false);
         assertEq(address(vault).balance, 10 ether);
     }
 
@@ -610,8 +599,7 @@ contract InsuranceTest is Test {
         blackjack.setPlayerCards(1, 10, 0);
 
         // Expect player to push after standing, ties and is paid out 2:1
-        blackjack.stand{value: 1 ether}(true, 0);
-        blackjack.cleanup();
+        blackjack.stand{value: 1 ether}(true);
         assertEq(address(vault).balance, 9 ether);
     }
 
@@ -621,8 +609,7 @@ contract InsuranceTest is Test {
         blackjack.setPlayerCards(1, 10, 0);
 
         // Expect player to win 1.5 ether after standing, loses 1 ether insurance
-        blackjack.stand{value: 1 ether}(true, 0);
-        blackjack.cleanup();
+        blackjack.stand{value: 1 ether}(true);
         assertEq(address(vault).balance, 9.5 ether);
     }
 
