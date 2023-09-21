@@ -8,8 +8,7 @@ import {Vault} from "./TestVault.sol";
 /**
  * @title Blackjack.sol
  * @author 0xjomahe
- * @notice This is a contract implementing the functionality of the game
- * Blackjack.
+ * @notice This is a contract implementing a fully decentralized Blackjack.
  */
 contract Blackjack is Ownable {
     // TODO: Look into throwing errors to save gas instead of require()
@@ -70,7 +69,8 @@ contract Blackjack is Ownable {
     }
 
     modifier handValid(uint8 handNum) {
-        require(gameData.hands[handNum].cards.length != 0, "Hand invalid");
+        Hand memory _hand = gameData.hands[handNum];
+        require(_hand.cards.length != 0 && !_hand.finished, "Hand invalid");
         _;
     }
 
@@ -234,10 +234,11 @@ contract Blackjack is Ownable {
 
     // TODO: mark internal when finished testing
     function getHandSum(uint8 handNum, bool _dealer) public returns (uint8) {
+        GameData memory _gameData = gameData;
         uint8 handSum;
         uint8[] memory hand = _dealer
-            ? gameData.dealerHand.cards
-            : gameData.hands[handNum].cards;
+            ? _gameData.dealerHand.cards
+            : _gameData.hands[handNum].cards;
         uint8 numCards = uint8(hand.length);
         uint8 aces;
         for (uint i; i < numCards; ++i) {
@@ -250,6 +251,8 @@ contract Blackjack is Ownable {
             }
         }
 
+        uint8 sumNoAces = handSum;
+
         for (uint j; j < aces; ++j) {
             if (handSum + 11 + (aces - j - 1) > 21) {
                 ++handSum;
@@ -257,10 +260,11 @@ contract Blackjack is Ownable {
                 handSum += 11;
             }
         }
+        bool softCriteria = (aces > 0 && (handSum != sumNoAces + aces));
         if (!_dealer) {
-            gameData.hands[handNum].soft = (handSum > 11 && aces > 0);
+            gameData.hands[handNum].soft = softCriteria;
         } else {
-            gameData.dealerHand.soft = (handSum > 11 && aces > 0);
+            gameData.dealerHand.soft = softCriteria;
         }
 
         return handSum;

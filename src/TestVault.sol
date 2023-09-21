@@ -31,7 +31,7 @@ contract Vault is ReentrancyGuard {
         uint256 _amount,
         address _to
     ) external onlyAuthorized nonReentrant {
-        (bool sent, bytes memory data) = payable(_to).call{value: _amount}("");
+        (bool sent, ) = payable(_to).call{value: _amount}("");
         require(sent, "Not sent to player");
     }
 
