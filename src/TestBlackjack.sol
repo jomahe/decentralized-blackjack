@@ -26,6 +26,7 @@ contract Blackjack is Ownable {
         uint8[] cards;
         bool soft;
         bool firstTurn;
+        bool busted;
         bool finished;
     }
     struct GameData {
@@ -98,8 +99,6 @@ contract Blackjack is Ownable {
                     gameData.hands[handNum].cards[0] +
                     gameData.hands[handNum].cards[1]
             );
-            // Dealer need not draw cards if the player has already busted
-            payout(21);
         }
 
         emit Hit(
@@ -133,31 +132,39 @@ contract Blackjack is Ownable {
         // TODO: uncomment the above line after testing:
         uint8 currSum = getHandSum(0, true);
 
-        while (currSum <= 21) {
-            // Dealer is forced to stop hitting at hard 17 or above
-            if (currSum >= 18 || (currSum == 17 && !gameData.dealerHand.soft)) {
-                break;
-            }
-            uint8 card = min(uint8((draws % 13) + 1), 10);
-            draws /= 100;
-            gameData.dealerHand.cards.push(card);
+        // Dealer only draws cards if there's an active hand
+        if (!isEveryHandBusted()) {
+            while (currSum <= 21) {
+                // Dealer is forced to stop hitting at hard 17 or above
+                if (
+                    currSum >= 18 ||
+                    (currSum == 17 && !gameData.dealerHand.soft)
+                ) {
+                    break;
+                }
+                uint8 card = uint8(((draws % 100) % 13) + 1);
+                draws /= 100;
+                gameData.dealerHand.cards.push(card);
 
-            currSum = getHandSum(0, true);
+                currSum = getHandSum(0, true);
+            }
         }
 
         uint8 playerHandVal;
         for (uint8 handNum; handNum < _gameData.nextOpenHandSlot; ++handNum) {
-            // Need to mark all the hands as being acted on
             playerHandVal = getHandSum(handNum, false);
-            gameData.hands[handNum].firstTurn = false;
+            if (playerHandVal > 21) {
+                emit Loss(handNum, playerHandVal);
+                continue;
+            }
+            // Need to mark all the hands as being acted on
+            _gameData.hands[handNum].firstTurn = false;
             if (currSum == playerHandVal) {
                 emit Push(handNum, playerHandVal);
+            } else if (currSum > 21 || playerHandVal > currSum) {
+                emit Win(handNum, playerHandVal);
             } else {
-                if (currSum > 21 || playerHandVal > currSum) {
-                    emit Win(handNum, playerHandVal);
-                } else {
-                    emit Loss(handNum, playerHandVal);
-                }
+                emit Loss(handNum, playerHandVal);
             }
             if (playerHandVal == 21) emit PlayerBlackjack(handNum);
         }
@@ -192,10 +199,19 @@ contract Blackjack is Ownable {
             cards: newHand,
             soft: false,
             firstTurn: true,
-            finished: false
+            finished: false,
+            busted: false
         });
 
         emit Split(cards[0]);
+    }
+
+    function isEveryHandBusted() internal view returns (bool) {
+        GameData memory _gameData = gameData;
+        for (uint i; i < _gameData.nextOpenHandSlot; ++i) {
+            if (_gameData.hands[i].busted = false) return false;
+        }
+        return true;
     }
 
     function buyInsurance() internal {
@@ -221,15 +237,18 @@ contract Blackjack is Ownable {
         uint8 handVal = getHandSum(handNum, false);
         require(
             _gameData.hands[handNum].firstTurn &&
+                _gameData.hands[handNum].doubleDownAmount + msg.value <=
+                _gameData.betAmount &&
                 handVal <= 11 &&
                 handVal >= 9 &&
-                msg.value <= _gameData.betAmount
+                msg.value > 0
         );
-        gameData.hands[handNum].doubleDownAmount = msg.value;
+        gameData.hands[handNum].doubleDownAmount += msg.value;
     }
 
     function isBusted(uint8 handNum, bool _dealer) internal returns (bool) {
-        return (getHandSum(handNum, _dealer) > 21);
+        gameData.hands[handNum].busted = (getHandSum(handNum, _dealer) > 21);
+        return gameData.hands[handNum].busted;
     }
 
     // TODO: mark internal when finished testing
@@ -270,7 +289,6 @@ contract Blackjack is Ownable {
         return handSum;
     }
 
-    // TODO: Update payout function to pay out all hands at once since player can only stand once
     function payout(uint8 dealerHand) internal {
         require(!paidOut, "Player already paid out!");
         paidOut = true;
@@ -297,12 +315,14 @@ contract Blackjack is Ownable {
                             : (betSize << 1);
                     }
                 }
+                // If the player doubled down on this hand we pay them their double down amount
+                amountToPay += (_gameData.hands[handNum].doubleDownAmount << 1);
             } else if (playerHand == dealerHand) {
-                amountToPay += betSize;
+                // In the case of a push the player gets back his bet and double down amount
+                amountToPay +=
+                    betSize +
+                    _gameData.hands[handNum].doubleDownAmount;
             }
-
-            // If the player doubled down on this hand we pay them their double down amount
-            amountToPay += (_gameData.hands[handNum].doubleDownAmount << 1);
         }
 
         // If the player wins their insurance bet they're paid out at 2:1
