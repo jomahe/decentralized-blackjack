@@ -277,6 +277,28 @@ contract StandTest is Test {
         blackjack.stand(false);
     }
 
+    function testStandNotAllFinished() public {
+        blackjack.setDealerCards(10, 7);
+        blackjack.setPlayerCards(9, 9, 0);
+
+        blackjack.split{value: 1 ether}(0);
+
+        blackjack.setPlayerCards(9, 9, 0);
+        blackjack.setPlayerCards(9, 9, 1);
+
+        blackjack.split{value: 1 ether}(0);
+        blackjack.split{value: 1 ether}(1);
+
+        blackjack.setPlayerCards(9, 9, 0);
+        blackjack.setPlayerCards(9, 8, 1);
+        blackjack.setPlayerCards(9, 7, 2);
+        blackjack.setPlayerCards(10, 1, 3);
+        blackjack.markFinished(true, false, true, true);
+
+        vm.expectRevert(bytes("Not all hands are finished!"));
+        blackjack.stand(false);
+    }
+
     receive() external payable {}
 }
 
