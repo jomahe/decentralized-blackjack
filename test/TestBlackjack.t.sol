@@ -189,6 +189,26 @@ contract HitTest is Test {
         blackjack.hit(false, 0);
     }
 
+    function testCanHitSplitAcesOnce() public {
+        blackjack.setPlayerCards(1, 1, 0);
+        blackjack.split{value: 1 ether}(0);
+
+        blackjack.hit(false, 0);
+        blackjack.hit(false, 1);
+
+        vm.expectRevert(bytes("Can't hit on split aces more than once"));
+        blackjack.hit(false, 0);
+    }
+
+    function testCanHitDoubledHandsOnce() public {
+        blackjack.setPlayerCards(8, 2, 0);
+        blackjack.doubleDown{value: 1 ether}(0);
+
+        blackjack.hit(false, 0);
+        vm.expectRevert(bytes("Cannot hit more than once on a doubled hand"));
+        blackjack.hit(false, 0);
+    }
+
     receive() external payable {}
 }
 
@@ -617,7 +637,6 @@ contract PayoutTest is Test {
         blackjack.setPlayerCards(9, 2, 0);
         blackjack.doubleDown{value: 1 ether}(0);
         blackjack.hit(false, 0);
-        blackjack.hit(false, 0);
         blackjack.setPlayerCards(7, 3, 1);
         blackjack.doubleDown{value: 0.5 ether}(1);
         blackjack.setPlayerCards(2, 7, 2);
@@ -626,7 +645,7 @@ contract PayoutTest is Test {
         blackjack.markFinished(true, true, true, true);
 
         vm.expectEmit(false, false, false, false);
-        emit Win(1, 1);
+        emit Loss(1, 1);
         vm.expectEmit(false, false, false, false);
         emit Loss(1, 1);
         vm.expectEmit(false, false, false, false);
@@ -640,7 +659,7 @@ contract PayoutTest is Test {
         vm.expectEmit(false, false, false, false);
         emit Paid(1 ether);
         blackjack.stand(false);
-        assertEq(address(vault).balance, 10 ether);
+        assertEq(address(vault).balance, 14 ether);
     }
 
     function testMultipleHandsDoubleDownWithInsurance() public {
@@ -658,10 +677,8 @@ contract PayoutTest is Test {
         blackjack.setPlayerCards(9, 2, 0);
         blackjack.doubleDown{value: 1 ether}(0);
         blackjack.hit{value: 1 ether}(true, 0);
-        blackjack.hit(false, 0);
         blackjack.setPlayerCards(7, 4, 1);
         blackjack.doubleDown{value: 0.5 ether}(1);
-        blackjack.hit(false, 1);
         blackjack.hit(false, 1);
         blackjack.setPlayerCards(2, 7, 2);
         blackjack.doubleDown{value: 0.5 ether}(2);
@@ -671,7 +688,7 @@ contract PayoutTest is Test {
         blackjack.markFinished(true, true, true, true);
 
         vm.expectEmit(false, false, false, false);
-        emit Push(1, 1);
+        emit Loss(1, 1);
         vm.expectEmit(false, false, false, false);
         emit Loss(1, 1);
         vm.expectEmit(false, false, false, false);
@@ -686,9 +703,9 @@ contract PayoutTest is Test {
         emit Paid(1 ether);
         blackjack.stand(false);
 
-        // Vault wins 1.5 Ether from hand 1, 2 Ether from hand 2, pays out 1.5 ether for natural Blackjack on hand 3.
+        // Vault wins 3 Ether from hand 1, 2 Ether from hand 2, pays out 1.5 ether for natural Blackjack on hand 3.
         // Also keeps the 1 Ether insurance bet. Net +3 Ether for vault
-        assertEq(address(vault).balance, 13 ether);
+        assertEq(address(vault).balance, 15 ether);
     }
 
     receive() external payable {}

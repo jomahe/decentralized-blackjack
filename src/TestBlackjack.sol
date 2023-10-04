@@ -26,6 +26,7 @@ contract Blackjack is Ownable {
         uint8[] cards;
         bool soft;
         bool firstTurn;
+        bool splitAces;
         bool busted;
         bool finished;
     }
@@ -72,9 +73,22 @@ contract Blackjack is Ownable {
     modifier handValid(uint8 handNum) {
         Hand memory _hand = gameData.hands[handNum];
         require(_hand.cards.length != 0 && !_hand.finished, "Hand invalid");
+
         _;
     }
 
+    modifier hitValid(uint8 handNum) {
+        Hand memory _hand = gameData.hands[handNum];
+        require(
+            !(_hand.splitAces && _hand.cards.length == 3),
+            "Can't hit on split aces more than once"
+        );
+        require(
+            !(_hand.cards.length == 3 && _hand.doubleDownAmount > 0),
+            "Cannot hit more than once on a doubled hand"
+        );
+        _;
+    }
     modifier onlyPlayer() {
         require(msg.sender == player, "Must be player to call function");
         _;
@@ -83,7 +97,14 @@ contract Blackjack is Ownable {
     function hit(
         bool _insurance,
         uint8 handNum
-    ) external payable onlyPlayer handValid(handNum) returns (uint8) {
+    )
+        external
+        payable
+        onlyPlayer
+        handValid(handNum)
+        hitValid(handNum)
+        returns (uint8)
+    {
         // Function logic
         if (_insurance) buyInsurance();
         gameData.hands[handNum].firstTurn = false;
@@ -188,6 +209,8 @@ contract Blackjack is Ownable {
         uint newCards = dealer.random();
         uint8 firstCard = uint8((newCards % 13) + 1);
         gameData.hands[handNum].cards[1] = firstCard;
+        bool _splitAces = (cards[0] == 1);
+        gameData.hands[handNum].splitAces = _splitAces;
 
         uint8[] memory newHand = new uint8[](2);
         uint8 secondCard = uint8(((newCards / 100) % 13) + 1);
@@ -200,7 +223,8 @@ contract Blackjack is Ownable {
             soft: false,
             firstTurn: true,
             finished: false,
-            busted: false
+            busted: false,
+            splitAces: _splitAces
         });
 
         emit Split(cards[0]);
