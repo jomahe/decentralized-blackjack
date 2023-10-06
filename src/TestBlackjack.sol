@@ -95,10 +95,9 @@ contract Blackjack is Ownable {
     }
 
     function hit(
-        bool _insurance,
         uint8 handNum
     )
-        external
+        public
         payable
         onlyPlayer
         handValid(handNum)
@@ -106,7 +105,6 @@ contract Blackjack is Ownable {
         returns (uint8)
     {
         // Function logic
-        if (_insurance) buyInsurance();
         gameData.hands[handNum].firstTurn = false;
         // Generate random number, add new card to hand and update handSum
         uint8 newCard = uint8(dealer.random() % 13) + 1;
@@ -137,14 +135,12 @@ contract Blackjack is Ownable {
         gameData.hands[3].finished = _h3;
     }
 
-    function stand(bool _insurance) external payable onlyPlayer {
+    function stand() external onlyPlayer {
         // Need to make sure all hands are complete before revealing dealer's cards
         GameData memory _gameData = gameData;
         for (uint i; i < _gameData.nextOpenHandSlot; ++i) {
             require(_gameData.hands[i].finished, "Not all hands are finished!");
         }
-
-        if (_insurance) buyInsurance();
 
         // Dealer draws second card, keeps drawing until bust or sum greater than player's
         uint256 draws = dealer.random();
@@ -238,7 +234,7 @@ contract Blackjack is Ownable {
         return true;
     }
 
-    function buyInsurance() internal {
+    function buyInsurance() external payable {
         /**
          * We should allow players to buy insurance whenever they want since it
          * represents a positive expected outcome for the house and because of
@@ -268,6 +264,7 @@ contract Blackjack is Ownable {
                 msg.value > 0
         );
         gameData.hands[handNum].doubleDownAmount += msg.value;
+        hit(handNum);
     }
 
     function isBusted(uint8 handNum, bool _dealer) internal returns (bool) {
